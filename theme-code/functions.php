@@ -1,100 +1,108 @@
 <?php
+/**
+ * OceanWP Child Theme Functions
+ *
+ * When running a child theme (see http://codex.wordpress.org/Theme_Development
+ * and http://codex.wordpress.org/Child_Themes), you can override certain
+ * functions (those wrapped in a function_exists() call) by defining them first
+ * in your child theme's functions.php file. The child theme's functions.php
+ * file is included before the parent theme's file, so the child theme
+ * functions will be used.
+ *
+ * Text Domain: oceanwp
+ * @link http://codex.wordpress.org/Plugin_API
+ *
+ */
 
-function create_meta(){
-    $user_id = get_current_user_id();
-    $meta_key = 'shipping_custom_data';
-    $meta_value = wp_json_encode(array("Peter"=>35, "Ben"=>37, "Joe"=>43)); 
-    $prev_value = false;
-	// update_user_meta( $user_id, $meta_key, $meta_value, $prev_value );
-}
-// add_action('init','create_meta');
+/**
+ * Load the parent style.css file
+ *
+ * @link http://codex.wordpress.org/Child_Themes
+ */
+function oceanwp_child_enqueue_parent_style() {
 
-function display_shipping_data()
-{
-	ob_start();
-    ?>
-    <a href="#" >Add Shipping</a>
-    <?php
-    $output = ob_get_contents();
-   echo  $output;
-    ob_end_clean();
-}
-add_action('shipping_after_address_display','display_shipping_data');
-add_action('woocommerce_after_edit_account_address_form','display_shipping_data');
+	// Dynamically get version number of the parent stylesheet (lets browsers re-cache your stylesheet when you update the theme).
+	$theme   = wp_get_theme( 'OceanWP' );
+	$version = $theme->get( 'Version' );
 
-function save_form_ajax(){
-	$user_id = get_current_user_id();
-	$shipping = array();
-	$data = array(
-		'shipping_first_name'=>$_POST['shipping_first_name'],
-		'shipping_last_name'=>$_POST['shipping_last_name'],
-		'shipping_company'=>$_POST['shipping_company'],
-		'shipping_address_1'=>$_POST['shipping_address_1'],
-		'shipping_address_2'=>$_POST['shipping_address_2'],
-		'shipping_city'=>$_POST['shipping_city'],
-		'shipping_state'=>$_POST['shipping_state'],
-		'shipping_postcode'=>$_POST['shipping_postcode'],
-		'shipping_country'=>$_POST['shipping_country'],
-	);	
-	$get_data = get_user_meta($user_id,'shipping_custom_data');	
-	$count = 1;
+	// Load the stylesheet.
+	wp_enqueue_style( 'child-style', get_stylesheet_directory_uri() . '/style.css', array( 'oceanwp-style' ), $version );
 	
-	if(is_array($get_data) && count($get_data) != 0){
-		$shipping = json_decode($get_data[0]);		
-		array_push($shipping,$data); 
-	}else{
-		$shipping[] = $data;
-	}	
-    $meta_key = 'shipping_custom_data';
-    $meta_value = wp_json_encode($shipping); 
-    $prev_value = false;	
-	update_user_meta( $user_id, $meta_key, $meta_value, $prev_value );
-  die;
 }
-add_action('wp_ajax_save_form_ajax', 'save_form_ajax');
-add_action('wp_ajax_nopriv_save_form_ajax', 'save_form_ajax');
 
-function footer_script(){
- ?>
- <script>
-	jQuery('form button[name="save_address"]').click(function(){
-		var url = window.location.href;
-		var arr = url.split('/custom-address=');
-		if(arr.length == 2){
-			var num = arr[1].replace('/','');
-			var shipping_first_name = jQuery('input[name="shipping-custom-address'+num+'_first_name"]').val();
-			var shipping_last_name = jQuery('input[name="shipping-custom-address'+num+'_last_name"]').val();
-			var shipping_company = jQuery('input[name="shipping-custom-address'+num+'_company"]').val();
-			var shipping_address_1 = jQuery('input[name="shipping-custom-address'+num+'_address_1"]').val();
-			var shipping_address_2 = jQuery('input[name="shipping-custom-address'+num+'_address_2"]').val();
-			var shipping_city = jQuery('input[name="shipping-custom-address'+num+'_city"]').val();
-			var shipping_state = jQuery('select[name="shipping-custom-address'+num+'_state"]').val();
-			var shipping_postcode = jQuery('input[name="shipping-custom-address'+num+'_postcode"]').val();
-			var shipping_country = jQuery('select[name="shipping-custom-address'+num+'_country"]').val();
-			jQuery.ajax({
-				type: 'POST',
-				url: 'http://localhost/shop-demo/wp-admin/admin-ajax.php',
-				data: {
-					'action': 'save_form_ajax',
-					'shipping_first_name':shipping_first_name,
-					'shipping_last_name': shipping_last_name,
-					'shipping_company': shipping_company,
-					'shipping_address_1': shipping_address_1,
-					'shipping_address_2': shipping_address_2,
-					'shipping_city': shipping_city,
-					'shipping_state':shipping_state,
-					'shipping_postcode':shipping_postcode,
-					'shipping_country':shipping_country,
-				},
-				success: function (serverResponse) {
-					console.log(serverResponse);
-					window.location.href = "http://localhost/shop-demo/my-account/edit-address/";
-				}
-			});
-		}    
-		return false;
-	});
- </script>
- <?php 
+add_action( 'wp_enqueue_scripts', 'oceanwp_child_enqueue_parent_style' );
+
+
+
+
+function edit_shipping_address_from_url()
+{
+    
+        $url = parse_url($_SERVER['REQUEST_URI']);
+        $type = explode('=', $url['query'])[1];		
+        $address_new = [];
+        if (!empty($type) && is_user_logged_in() && $_POST['save_address']) {
+            $addresses_data = get_user_meta(get_current_user_id(), 'thwma_custom_address', true);
+            if (empty($addresses_data['shipping'])) {	
+				// blank array data store			
+                $address_new['shipping'][$type] = array(
+                    'shipping_first_name' => $_POST['shipping_first_name'],
+                    'shipping_last_name' => $_POST['shipping_last_name'],
+                    'shipping_company' => $_POST['shipping_company'],
+                    'shipping_country' => $_POST['shipping_country'],
+                    'shipping_address_1' => $_POST['shipping_address_1'],
+                    'shipping_address_2' => $_POST['shipping_address_2'],
+                    'shipping_city' => $_POST['shipping_city'],
+                    'shipping_state' => $_POST['shipping_state'],
+                    'shipping_postcode' => $_POST['shipping_postcode'],                   
+                );
+              //  $address_new['default_shipping'] = $type;
+                update_user_meta(get_current_user_id(), 'check_user_login', 1);
+
+            } else {
+                foreach ($addresses_data as $address_type => $address_value) {
+                    if ($address_type == 'shipping') {
+                        if (in_array($type, array_keys($address_value))) {
+                            foreach ($address_value as $shipping_key => $shipping_value) {
+								// update data array								
+                                if ($type != $shipping_key) {
+                                    $address_new['shipping'][$shipping_key] = $shipping_value;
+
+                                } else {
+                                    $address_new['shipping'][$type] = array(
+                                        'shipping_first_name' => $_POST['shipping_first_name'],
+                                        'shipping_last_name' => $_POST['shipping_last_name'],
+                                        'shipping_company' => $_POST['shipping_company'],
+                                        'shipping_country' => $_POST['shipping_country'],
+                                        'shipping_address_1' => $_POST['shipping_address_1'],
+                                        'shipping_address_2' => $_POST['shipping_address_2'],
+                                        'shipping_city' => $_POST['shipping_city'],
+                                        'shipping_state' => $_POST['shipping_state'],
+                                        'shipping_postcode' => $_POST['shipping_postcode'],                                      
+                                    );
+                                }
+                            }
+                        } else {
+							// new data array
+                            $address_new['shipping'] = $address_value;
+                            $address_new['shipping'][$type] = array(
+                                'shipping_first_name' => $_POST['shipping_first_name'],
+                                'shipping_last_name' => $_POST['shipping_last_name'],
+                                'shipping_company' => $_POST['shipping_company'],
+                                'shipping_country' => $_POST['shipping_country'],
+                                'shipping_address_1' => $_POST['shipping_address_1'],
+                                'shipping_address_2' => $_POST['shipping_address_2'],
+                                'shipping_city' => $_POST['shipping_city'],
+                                'shipping_state' => $_POST['shipping_state'],
+                                'shipping_postcode' => $_POST['shipping_postcode'],                                
+                            );
+                        }
+                    }
+                }
+                $address_new['default_shipping'] = $addresses_data['default_shipping'];
+            }				
+            update_user_meta(get_current_user_id(), 'thwma_custom_address', $address_new);
+        } 
+
 }
-add_action('wp_footer','footer_script');
+add_action('wp_loaded', 'edit_shipping_address_from_url');
